@@ -1,5 +1,13 @@
 Revision history for Perl extension PDFLib.
 
+0.04
+    - Added access to all graphics primitives
+    - Added string_width
+    - Revamped some of the documentation
+
+0.03
+    - Bug fixes
+
 0.02
     - Added documentation
 
