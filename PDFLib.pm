@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.17 2002/02/13 00:04:08 matt Exp $
+# $Id: PDFLib.pm,v 1.21 2002/02/14 17:25:10 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 my %stacklevel = (
         object => 0,
@@ -222,7 +222,7 @@ old/current paper size.
 sub papersize {
     my $pdf = shift;
 
-    my $old = $pdf->{papersize};
+    my $old = $pdf->{papersize} || 'a4';
     if (@_) {
         $pdf->{papersize} = shift @_;
     }
@@ -1630,6 +1630,8 @@ sub new {
 
     $self->{y2} = $self->{y};
     $self->{finished} = 0;
+    
+    $self->set_text_pos($self->{x}, $self->{y});
 
     return $self;
 }
@@ -1686,8 +1688,7 @@ sub set_color {
     $self->push_todo(sub {
         $self->SUPER::set_color(@params)
     });
-
-    # $self->SUPER::set_color(@params);
+    $self->SUPER::set_color(@params);
 }
 
 *set_colour = \&set_color;
@@ -1736,12 +1737,21 @@ sub print {
         while (@lines) {
             my $line = shift(@lines);
             $self->SUPER::print($line);
+            
+            # font resets on newline...
+            my $font = $self->get_parameter("fontname");
+            my $size = $self->get_value("fontsize");
+            my $leading = $self->get_value("leading");
+            
             $self->SUPER::print_line("");
-            my ($x, $y) = $self->get_text_pos;
-            if ($y < (($PDFLib::Page::Size{$self->papersize}[1] - $self->{y}) - $self->{h})) {
+            (undef, $self->{y2}) = $self->get_text_pos;
+            if ($self->{y2} < (($PDFLib::Page::Size{$self->papersize}[1] - $self->{y}) - $self->{h})) {
                 # gone overboard
                 return join("\n", @lines, $last);
             }
+            
+            $self->set_font(face => $font, size => $size);
+            $self->set_value(leading => $leading);
         }
         $self->SUPER::print($last) if length($last);
     }

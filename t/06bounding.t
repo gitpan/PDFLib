@@ -85,8 +85,11 @@ $bb->print("small box");
 
 $bb->finish;
 
-$pdf->rect(x => 400, y => 500, w => 200, h => 40);
-$pdf->stroke;
+$bb = $pdf->new_bounding_box(
+	x => 20, y => 270, h => 255, w => 421, wrap => 0,
+); # bug in 1.18, reported by Aaron
+$bb->print("Hello\nworld");
+$bb->finish;
 
 $pdf->finish;
 
