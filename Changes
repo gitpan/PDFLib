@@ -1,5 +1,8 @@
 Revision history for Perl extension PDFLib.
 
+0.02
+    - Added documentation
+
 0.01  Fri May  4 14:46:06 2001
 	- original version; created by h2xs 1.19
 
