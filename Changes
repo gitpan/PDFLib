@@ -1,5 +1,8 @@
 Revision history for Perl extension PDFLib.
 
+0.08
+    - More BB fixes
+
 0.07
     - Fixed BoundingBox::print to return the characters it couldn't
       fit into the box, useful for multi-column or multi-page

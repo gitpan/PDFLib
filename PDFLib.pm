@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.14 2002/02/12 15:25:45 matt Exp $
+# $Id: PDFLib.pm,v 1.17 2002/02/13 00:04:08 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 my %stacklevel = (
         object => 0,
@@ -75,7 +75,7 @@ The orientation of the pages. This defaults to "portrait".
 
 Example:
 
-  my $pdf = PDFLib->new(creator => "My PDF Program", 
+  my $pdf = PDFLib->new(creator => "My PDF Program",
         author => "Me",
         title => "Business Report");
 
@@ -201,7 +201,7 @@ it will set the new value. Returns the old value.
 sub info {
     my $pdf = shift;
     my $key = shift;
-    
+
     my $old = $pdf->{info}{$key};
     if (@_) {
         $pdf->{info}{$key} = shift(@_);
@@ -221,7 +221,7 @@ old/current paper size.
 
 sub papersize {
     my $pdf = shift;
-    
+
     my $old = $pdf->{papersize};
     if (@_) {
         $pdf->{papersize} = shift @_;
@@ -231,15 +231,15 @@ sub papersize {
 
 =head2 orientation(...)
 
-A getter and setter for the current page orientation. All this 
-really does is swap the x and y values in the paper size if 
+A getter and setter for the current page orientation. All this
+really does is swap the x and y values in the paper size if
 orientation == "landscape". Returns the current/old orientation.
 
 =cut
 
 sub orientation {
     my $pdf = shift;
-    
+
     my $old = $pdf->{orientation};
     if (@_) {
         $pdf->{orientation} = shift @_;
@@ -249,16 +249,16 @@ sub orientation {
 
 sub stacklevel {
     my $pdf = shift;
-    
+
     return $stacklevel{$pdf->{stacklevel}};
 }
 
 =head2 start_page(...)
 
-Start a new page. If a page has already been started, this will call 
+Start a new page. If a page has already been started, this will call
 end_page() automatically for you.
 
-Options are passed in as name/value pairs, and are passed to 
+Options are passed in as name/value pairs, and are passed to
 PDFLib::Page->new() below.
 
 =cut
@@ -301,7 +301,7 @@ sub end_page {
 
 sub _equals_font {
     my ($old, %new) = @_;
-    
+
     local $^W;
     foreach my $key (qw(face bold italic)) {
         return if ($old->{$key} ne $new{$key});
@@ -340,7 +340,7 @@ sub lookup_font {
     my %params = @_;
 
     $params{face} = ucfirst($params{face});
-    
+
     if ($params{bold} || $params{italic}) {
         if (!exists($fontmap{$params{face}})) {
             die "Don't know about $params{face} for bold/italic,\ntry specifying the bold/italic name directly\ne.g. Times-BoldItalic";
@@ -401,7 +401,7 @@ See the pdflib documentation for more details.
 
 =item embed
 
-If set to a true value, this will embed the font in the PDF 
+If set to a true value, this will embed the font in the PDF
 file. This can be useful if using fonts outside of the 14 
 listed above, but extra font metrics information is required 
 and you will need to read the pdflib documentation for more
@@ -426,9 +426,9 @@ sub set_font {
     {
         return PDF_setfont($pdf->_pdf, $pdf->{current_font}->{handle}, $params{size});
     }
-    
+
     # warn("PDF_findfont(\$p, '$fontstring', 'host', 0);\n");
-    my $font = PDF_findfont($pdf->_pdf, 
+    my $font = PDF_findfont($pdf->_pdf,
                 $params{face}, 
                 $params{encoding} || 'host', 
                 $params{embed} || 0
@@ -440,7 +440,7 @@ sub set_font {
     $pdf->{current_font}->{size} = $params{size};
     
     # warn("font handle: $font (size: $params{size})\n");
-    
+
     PDF_setfont($pdf->_pdf, $font, $params{size});
 }
 
@@ -482,7 +482,7 @@ sub string_width {
     my $pdf = shift;
     # expecting text, [face, size, bold, italic, encoding, embed]
     my %params = lookup_font(@_);
-    
+
     $params{size} ||= $pdf->get_value("fontsize") || 10.0;
     
     my $font;
@@ -629,7 +629,7 @@ sub print_line {
     my $pdf = shift;
     
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
-    
+
     PDF_continue_text($pdf->_pdf, $_[0]);
 }
 
@@ -767,7 +767,7 @@ sub load_image {
     my $pdf = shift;
     die "Cannot load images unless at document level"
                 if $pdf->stacklevel > $stacklevel{document};
-    
+
     my %params = @_;
     
     my $img = PDFLib::Image->open(pdf => $pdf, %params);
@@ -1492,21 +1492,21 @@ available sizes.
 sub new {
     my $class = shift;
     my ($pdf, %params) = @_;
-    
+
     $params{papersize} ||= 'a4';
     $params{orientation} ||= 'portrait';
-    
+
     my ($x, $y) = @{$Size{$params{papersize}}};
     if ($params{orientation} eq 'landscape') {
 #        warn("swapping aspect\n");
         ($x, $y) = ($y, $x); # swap around!
     }
-    
+
 #    warn("PDF_begin_page($x, $y)\n");
     PDF_begin_page($pdf, $x, $y);
-    
+
     $params{pdf} = $pdf;
-    
+
     return bless \%params, $class;
 }
 
@@ -1542,12 +1542,12 @@ sub open {
                 $params{stringparam} || "",
                 $params{intparam} || 0,
                 );
-    
+
     if ($image_handle == -1) {
         PDF_set_parameter($params{pdf}->_pdf, "imagewarning", "true");
         die "Cannot open image file '$params{filename}'";
     }
-    
+
     $params{handle} = $image_handle;
     return bless \%params, $class;
 }
@@ -1613,41 +1613,48 @@ desirable (see the output of t/06bounding.t in the distribution for example).
 sub new {
     my $class = shift;
     my ($pdf, %args) = @_;
-    
+
     die "Invalid BoundingBox params" unless
         $args{x} && $args{y} && $args{w} && $args{h};
 
     $args{wrap} = 1 if (!exists($args{wrap}));
     $args{align} ||= 'left';
-    
+    $args{align} = 'centre' if $args{align} eq 'center';
+
     my $self = bless {%$pdf, %args, todo => [], cur_width => 0},
                      $class;
-    
-    $self->save_graphics_state;
-    
-    if (!$args{wrap}) {
-        # create a clip rect instead
-        die "Cannot do no-wrap plus $args{align} align"
-            if $args{align} ne 'left';
-        $self->rect(x => $args{x}, y => $args{y},
-                   w => $args{w}, h => $args{h});
-        $self->clip;
+
+    if ($self->{align} eq 'centre') {
+    	$self->{x} = $self->{x} + ($self->{w}/2);
     }
-    
+
     $self->{y2} = $self->{y};
+    $self->{finished} = 0;
 
     return $self;
 }
 
 sub finish {
     my $self = shift;
+    return if $self->{finished};
+    my $xpos = $self->{align} eq 'centre' ?
+            ($self->{x} - ($self->{cur_width}/2))
+            :
+        $self->{align} eq 'right' ?
+            ($self->{x} - $self->{cur_width})
+            :
+        $self->{align} eq 'left' ?
+            $self->{x}
+            :
+            die "No such alignment: $self->{align}";
+    $self->set_text_pos($xpos, $self->{y2});
     $self->run_todo;
+    $self->{finished} = 1;
 }
 
 sub DESTROY {
     my $self = shift;
-    $self->run_todo;
-    $self->restore_graphics_state;
+    $self->finish;
 }
 
 sub push_todo {
@@ -1731,7 +1738,7 @@ sub print {
             $self->SUPER::print($line);
             $self->SUPER::print_line("");
             my ($x, $y) = $self->get_text_pos;
-            if ($y < ($self->{y} - $self->{h})) {
+            if ($y < (($PDFLib::Page::Size{$self->papersize}[1] - $self->{y}) - $self->{h})) {
                 # gone overboard
                 return join("\n", @lines, $last);
             }
@@ -1758,10 +1765,7 @@ sub print {
                 }
                 else {
                     # word carries us over the line
-                    my $xpos = $self->{align} eq 'center' ?
-                            ($self->{x} - ($self->{cur_width}/2))
-                            :
-                        $self->{align} eq 'centre' ?
+                    my $xpos = $self->{align} eq 'centre' ?
                             ($self->{x} - ($self->{cur_width}/2))
                             :
                         $self->{align} eq 'right' ?
@@ -1778,7 +1782,7 @@ sub print {
                     my $font = $self->get_parameter("fontname");
                     my $size = $self->get_value("fontsize");
                     my $leading = $self->get_value("leading");
-                    
+
                     $self->SUPER::print_line("");
                     (undef, $self->{y2}) = $self->get_text_pos;
                     if ($self->{y2} < ($self->{y} - $self->{h})) {
@@ -1796,6 +1800,7 @@ sub print {
             }
         }
     }
+    return;
 }
 
 1;
