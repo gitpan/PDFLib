@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.21 2002/02/14 17:25:10 matt Exp $
+# $Id: PDFLib.pm,v 1.22 2002/03/06 15:02:59 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 my %stacklevel = (
         object => 0,
@@ -86,7 +86,7 @@ sub new {
     my %params = @_; # params: filename, papersize, creator, author, title
     
     my $pdf = bless {pdf => PDF_new(), %params}, $class;
-    
+
     $pdfs{$pdf + 0} = $pdf->{pdf};
     
     $pdf->filename($pdf->{filename} || "");
@@ -958,7 +958,7 @@ Which draws a line from the bottom left to the middle of the page.
 
 All graphics calls must be accompanied by a call to either one of
 stroke, close_path_stroke, fill, fill_stroke, close_path_fill_stroke,
-clip, or end_path. (note this means you can have 1 or 4 or 36 
+clip, or end_path. (note this means you can have 1 or 4 or 36
 graphics calls, and a single call to one of the above, but beware
 of the results).
 
@@ -1018,13 +1018,13 @@ Think of them like this:
           >
          /
         /
- 
+
  round: \
          \
           )
          /
         /
- 
+
  bevel: \
          \
           |
@@ -1148,7 +1148,7 @@ sub move_to {
 Draw a line from the current point to the coordinates specified.
 
 =cut
-    
+
 sub line_to {
     my $pdf = shift;
     die "Invalid number of params (need two)" unless @_ == 2;
@@ -1354,6 +1354,93 @@ sub end_path {
     PDF_endpath($pdf->_pdf);
 }
 
+=head1 Changing the Coordinate System
+
+PDFLib allows you to alter the coordinate system in various ways while you are working.
+This is affected by save/restore_graphics_state, so it's always useful to wrap these
+methods around a save/restore block.
+
+The most useful thing this allows you to do is draw shapes not listed above, like ellipses,
+parallelograms, etc.
+
+=head2 coord_translate ($x, $y)
+
+Translate the coordinate system by x, y
+
+=cut
+
+sub coord_translate {
+    my $pdf = shift;
+    my ($x, $y) = @_;
+    PDF_translate($pdf->_pdf, $x, $y);
+}
+
+=head2 coord_scale ($xscale, $yscale)
+
+Scale the coordinate system.
+
+=cut
+
+sub coord_scale {
+    my $pdf = shift;
+    my ($xscale, $yscale) = @_;
+    PDF_scale($pdf->_pdf, $xscale, $yscale);
+}
+
+=head2 coord_rotate ($degrees)
+
+Rotate the coordinate system the given number of degrees (0 - 360)
+
+=cut
+
+sub coord_rotate {
+    my $pdf = shift;
+    my ($degrees) = @_;
+    PDF_rotate($pdf->_pdf, $degrees);
+}
+
+=head2 coord_skew ($xshear, $yshear)
+
+Skew (or shear) the coordinate system by the number of degrees given in the X
+and Y directions.
+
+=cut
+
+sub coord_skew {
+    my $pdf = shift;
+    my ($xshear, $yshear) = @_;
+    PDF_skew($pdf->_pdf, $xshear, $yshear);
+}
+
+=head2 coord_set_matrix (%params)
+
+Set the current transformation matrix. This is heavy stuff - use the other
+functions instead unless you know what you're doing.
+
+Params are a hash containing a, b, c, d, e and f entries.
+
+=cut
+
+sub coord_set_matrix {
+    my $pdf = shift;
+    my %params = @_;
+    PDF_setmatrix($pdf->_pdf, @params{qw(a b c d e f)});
+}
+
+=head2 coord_concat_matrix (%params)
+
+Concatenate to the current transformation matrix.
+
+Params are the same as coord_set_matrix.
+
+=cut
+
+sub coord_concat_matrix {
+    my $pdf = shift;
+    my %params = @_;
+    PDF_concat($pdf->_pdf, @params{qw(a b c d e f)});
+}
+
 =head1 Colour Functions
 
 =head2 set_colour/set_color
@@ -1365,14 +1452,14 @@ a hash parameter somehow. It is easiest to show using examples:
 
   # 40% grayscale.
   $pdf->set_color(gray => 0.4);
-  
+
   $pdf->set_color(rgb => [$r, $g, $b]);
-  
+
   $pdf->set_color(cmyk => [$c, $m, $y, $k]);
-  
+
   # see make_spot_color below
   $pdf->set_color(spot => { handle => $h, tint => 0.3 });
-  
+
   # see make_pattern below
   $pdf->set_color(pattern => $pattern);
 

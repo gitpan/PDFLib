@@ -1,5 +1,8 @@
 Revision history for Perl extension PDFLib.
 
+0.10
+    - Added all coordinate translation methods
+    
 0.09
     - Default pagesize properly
     - Even more bounding box fixes
