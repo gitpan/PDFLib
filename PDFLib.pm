@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.8 2002/02/05 08:36:39 matt Exp $
+# $Id: PDFLib.pm,v 1.11 2002/02/06 08:02:14 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 my %stacklevel = (
         object => 0,
@@ -379,7 +379,8 @@ The font face to use. Best to choose from one of the builtin fonts:
 
 =item size
 
-The font size in points. This defaults to 12.0
+The font size in points. This defaults to the current font size,
+or 10.0 point.
 
 =item bold
 
@@ -414,7 +415,11 @@ sub set_font {
     my $pdf = shift;
     my %params = lookup_font(@_); # expecting: face, size, bold, italic
     
-    $params{size} ||= 12.0;
+    $params{size} ||= $pdf->get_value('fontsize') || 10.0;
+    
+    if ($params{handle}) {
+        return PDF_setfont($pdf->_pdf, $params{handle}, $params{size});
+    }
 
     if (exists $pdf->{current_font} &&
         lc($pdf->{current_font}{face}) eq lc($params{face}) )
@@ -479,7 +484,7 @@ sub string_width {
     # expecting text, [face, size, bold, italic, encoding, embed]
     my %params = lookup_font(@_);
     
-    $params{size} ||= $pdf->{current_font}{size};
+    $params{size} ||= $pdf->get_value("fontsize") || 10.0;
     
     my $font;
     if ( exists($pdf->{current_font}) ) {
@@ -1206,12 +1211,27 @@ sub close_path {
     PDF_closepath($pdf->_pdf);
 }
 
+=head2 stroke
+
+Draws the current path as line.
+
+You must call this (or one of the path ending functions) or no line
+will be drawn.
+
+=cut
+
 sub stroke {
     my $pdf = shift;
     return unless $pdf->stacklevel >= $stacklevel{path};
     $pdf->{stacklevel} = 'page'; # hmm, could be template?
     PDF_stroke($pdf->_pdf);
 }
+
+=head2 close_path_stroke
+
+Closes the path and strokes it.
+
+=cut
 
 sub close_path_stroke {
     my $pdf = shift;
@@ -1220,12 +1240,24 @@ sub close_path_stroke {
     PDF_closepath_stroke($pdf->_pdf);
 }
 
+=head2 fill
+
+Fills the current path using the currently selected colour.
+
+=cut
+
 sub fill {
     my $pdf = shift;
     return unless $pdf->stacklevel >= $stacklevel{path};
     $pdf->{stacklevel} = 'page'; # hmm, could be template?
     PDF_fill($pdf->_pdf);
 }
+
+=head2 fill_stroke
+
+Fills the current path and strokes it.
+
+=cut
 
 sub fill_stroke {
     my $pdf = shift;
@@ -1234,6 +1266,12 @@ sub fill_stroke {
     PDF_fill_stroke($pdf->_pdf);
 }
 
+=head2 close_path_fill_stroke
+
+Closes the current path, fills it, and strokes it.
+
+=cut
+
 sub close_path_fill_stroke {
     my $pdf = shift;
     return unless $pdf->stacklevel >= $stacklevel{path};
@@ -1241,12 +1279,25 @@ sub close_path_fill_stroke {
     PDF_closepath_fill_stroke($pdf->_pdf);
 }
 
+=head2 clip
+
+Uses the current path as a clipping region. Often useful in
+conjunction with save/restore_graphics_state.
+
+=cut
+
 sub clip {
     my $pdf = shift;
     return unless $pdf->stacklevel >= $stacklevel{path};
     $pdf->{stacklevel} = 'page'; # hmm, could be template?
     PDF_clip($pdf->_pdf);
 }
+
+=head2 end_path
+
+Ends the path without doing anything.
+
+=cut
 
 sub end_path {
     my $pdf = shift;
@@ -1309,12 +1360,29 @@ sub set_color {
 
 *set_colour = \&set_color; # yicky americanisms!
 
+=head2 make_spot_color/make_spot_colour
+
+Makes a named spot colour using the name passed as a parameter.
+
+Useful for saving away the current colour to restore it later.
+
+=cut
+
 sub make_spot_color {
     my $pdf = shift;
-    PDF_makespotcolor($pdf->_pdf, shift);
+    my $colour = shift;
+    PDF_makespotcolor($pdf->_pdf, $colour, length($colour));
 }
 
 *make_spot_colour = \&make_spot_color;
+
+=head2 begin_patter
+
+Starts a pattern. Parameters are passed as a hash of width,
+height, xstep, ystep, and painttype. See the pdflib manual
+for more details.
+
+=cut
 
 sub begin_pattern {
     my $pdf = shift;
@@ -1323,6 +1391,12 @@ sub begin_pattern {
     PDF_begin_pattern($pdf->_pdf,
         @params{qw(width height xstep ystep painttype)});
 }
+
+=head2 end_pattern
+
+Finishes the current pattern.
+
+=cut
 
 sub end_pattern {
     my $pdf = shift;

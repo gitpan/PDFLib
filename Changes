@@ -1,5 +1,10 @@
 Revision history for Perl extension PDFLib.
 
+0.05
+    - Better font defaults (size defaults to current size or 10.0)
+    - Allow set_font(handle => ...)
+    - Fixed make_spot_color
+
 0.04
     - Added access to all graphics primitives
     - Added string_width
