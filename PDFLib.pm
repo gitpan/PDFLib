@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.3 2001/05/15 07:42:07 matt Exp $
+# $Id: PDFLib.pm,v 1.5 2001/06/06 12:08:15 matt Exp $
 
 package PDFLib;
 
@@ -7,7 +7,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 my %stacklevel = (
         object => 0,

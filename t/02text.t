@@ -7,7 +7,7 @@ ok(1);
 my $pdf = PDFLib->new();
 
 $pdf->start_page();
-ok($pdf->print("Hello World"), undef);
+ok(!$pdf->print("Hello World"));
 
 ok($pdf->get_buffer);
 
