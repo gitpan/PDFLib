@@ -9,5 +9,6 @@ t/02text.t
 t/03image.t
 t/04font.t
 t/05graphics.t
+t/06bounding.t
 img/axkit.png
 

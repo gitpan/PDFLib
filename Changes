@@ -1,5 +1,8 @@
 Revision history for Perl extension PDFLib.
 
+0.06
+    - Added Bounding Box API
+
 0.05
     - Better font defaults (size defaults to current size or 10.0)
     - Allow set_font(handle => ...)

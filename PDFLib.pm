@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.11 2002/02/06 08:02:14 matt Exp $
+# $Id: PDFLib.pm,v 1.13 2002/02/11 16:09:46 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 my %stacklevel = (
         object => 0,
@@ -416,7 +416,7 @@ sub set_font {
     my %params = lookup_font(@_); # expecting: face, size, bold, italic
     
     $params{size} ||= $pdf->get_value('fontsize') || 10.0;
-    
+
     if ($params{handle}) {
         return PDF_setfont($pdf->_pdf, $params{handle}, $params{size});
     }
@@ -441,7 +441,6 @@ sub set_font {
     
     # warn("font handle: $font (size: $params{size})\n");
     
-    # warn("PDF_setfont(\$p, $font, $params{size});\n");
     PDF_setfont($pdf->_pdf, $font, $params{size});
 }
 
@@ -550,7 +549,7 @@ sub print {
     my $pdf = shift;
     
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
-    
+
     PDF_show($pdf->_pdf, $_[0]);
 }
 
@@ -573,7 +572,9 @@ sub print_at {
 
 This is perhaps the most interesting output method as it allows
 you to define a bounding box to put the text into, and PDFLib
-will wrap the text for you.
+will wrap the text for you. The only problem with it is that you 
+cannot change the font while printing into this kind of bounding
+box. Better to use L<"new_bounding_box"> below.
 
 The parameters you can pass are:
 
@@ -689,6 +690,53 @@ sub set_parameter {
     
     PDF_set_parameter($pdf->_pdf, $_[0], $_[1]);
 }
+
+=head2 new_bounding_box(%params)
+
+Creates a new BoundingBox (see below) that you can print into.
+
+Example:
+
+  my $bb = $pdf->new_bounding_box(
+        x => 30, y => 800, w => 300, h => 800
+    );
+  $bb->print($long_text);
+  $bb->finish; # MUST call this!
+
+Valid parameters are:
+
+=over 4
+
+=item x and y (required)
+
+The x and y coordinates of the start of the bounding box.
+
+=item w and h (required)
+
+The width and height of the bounding box.
+
+=item align (default = 'left')
+
+The alignment of the text in the bounding box. Can be "centre", or
+"center" (for the Americans), or "right" or "left".
+
+=item wrap (default = 1)
+
+Whether or not to automatically wrap the text. At the moment this will
+automatically wrap at whitespace only. It will not do any fancy
+hyphenation or justification. If you turn wrapping off, you are
+expected to do your own wrapping using either newlines, or print_line.
+
+=back
+
+=cut
+
+sub new_bounding_box {
+    my $pdf = shift;
+    return PDFLib::BoundingBox->new($pdf, @_);
+}
+
+
 
 =head2 load_image(...)
 
@@ -1534,6 +1582,189 @@ sub height {
 sub close {
     my $self = shift;
     PDF_close_image(shift, $self->{handle});
+}
+
+##################################################################
+# PDFLib::BoundingBox - Bounded Printing
+##################################################################
+
+package PDFLib::BoundingBox;
+
+use vars qw(@ISA);
+@ISA = qw(PDFLib);
+
+=head1 PDFLib::BoundingBox
+
+BoundingBox is a bounded printing API. You create a bounding box, then print
+into it, and it wraps and/or ensures you don't print outside of that box.
+
+For details of bounding boxes, see L<"new_bounding_box"> above.
+
+When you are finished with a bounding box, you B<must> call finish() on
+it so that it can clean up.
+
+=cut
+
+sub new {
+    my $class = shift;
+    my ($pdf, %args) = @_;
+    
+    die "Invalid BoundingBox params" unless
+        $args{x} && $args{y} && $args{w} && $args{h};
+
+    $args{wrap} = 1 if (!exists($args{wrap}));
+    $args{align} ||= 'left';
+    
+    my $self = bless {%$pdf, %args, todo => [], cur_width => 0},
+                     $class;
+    
+    $self->save_graphics_state;
+    
+    if (!$args{wrap}) {
+        # create a clip rect instead
+        die "Cannot do no-wrap plus $args{align} align"
+            if $args{align} ne 'left';
+        $self->rect(x => $args{x}, y => $args{y},
+                   w => $args{w}, h => $args{h});
+        $self->clip;
+    }
+
+    return $self;
+}
+
+sub finish {
+    my $self = shift;
+    $self->run_todo;
+}
+
+sub DESTROY {
+    my $self = shift;
+    $self->run_todo;
+    $self->restore_graphics_state;
+}
+
+sub push_todo {
+    my $self = shift;
+    my ($closure) = @_;
+    push @{$self->{todo}}, $closure;
+}
+
+sub run_todo {
+    my $self = shift;
+    for (@{$self->{todo}}) {
+        $_->();
+    }
+    $self->{todo} = [];
+}
+
+sub set_font {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(sub {
+        $self->SUPER::set_font(@params)
+    });
+    $self->SUPER::set_font(@params);
+}
+
+sub set_color {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(sub {
+        $self->SUPER::set_color(@params)
+    });
+
+    # $self->SUPER::set_color(@params);
+}
+
+*set_colour = \&set_color;
+
+sub print_line {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(sub {
+        $self->SUPER::print_line(@params);
+    });
+    $self->{cur_width} = 0;
+    $self->SUPER::print_line(@params);
+}
+
+sub set_value {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(sub {
+        $self->SUPER::set_value(@params);
+    });
+    $self->SUPER::set_value(@params);
+}
+
+sub set_parameter {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(sub {
+        $self->SUPER::set_parameter(@params);
+    });
+    $self->SUPER::set_parameter(@params);
+}
+
+sub print {
+    my $self = shift;
+    if (!$self->{wrap}) {
+        $self->SUPER::print(@_);
+    }
+    else {
+        my $text = shift;
+        my $width = $self->string_width(text => $text);
+        if (($width + $self->{cur_width}) <= $self->{w}) {
+            $self->{cur_width} += $width;
+            $self->push_todo(sub { $self->SUPER::print($text) });
+        }
+        else {
+            # too wide - split into words and print
+            $text =~ s/(\x0D?\x0A|\x0D)/ /g;
+            while (length($text)) {
+                $text =~ s/^(\S*\s*)// or last;
+                my $word = $1;
+                my $width = $self->string_width(text => $word);
+                if (($width + $self->{cur_width}) <= $self->{w}) {
+                    $self->{cur_width} += $width;
+                    $self->push_todo(sub { $self->SUPER::print($word) });
+                }
+                else {
+                    # word carries us over the line
+                    my $xpos = $self->{align} eq 'center' ?
+                            ($self->{x} - ($self->{cur_width}/2))
+                            :
+                        $self->{align} eq 'centre' ?
+                            ($self->{x} - ($self->{cur_width}/2))
+                            :
+                        $self->{align} eq 'right' ?
+                            ($self->{x} - $self->{cur_width})
+                            :
+                        $self->{align} eq 'left' ?
+                            $self->{x}
+                            :
+                            die "No such alignment: $self->{align}";
+                    $self->set_text_pos($xpos, $self->{y});
+                    $self->run_todo;
+
+                    # font resets on newline...
+                    my $font = $self->get_parameter("fontname");
+                    my $size = $self->get_value("fontsize");
+                    my $leading = $self->get_value("leading");
+                    
+                    $self->SUPER::print_line("");
+                    (undef, $self->{y}) = $self->get_text_pos;
+
+                    $self->set_font(face => $font, size => $size);
+                    $self->set_value(leading => $leading);
+                    $self->push_todo(sub {
+                        $self->SUPER::print($word);
+                    });
+                    $self->{cur_width} = $width;
+                }
+            }
+        }
+    }
 }
 
 1;
