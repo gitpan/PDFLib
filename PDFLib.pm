@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.23 2002/03/07 21:15:55 matt Exp $
+# $Id: PDFLib.pm,v 1.24 2002/03/21 14:52:33 matt Exp $
 
 =head1 NAME
 
@@ -25,7 +25,7 @@ use vars qw/$VERSION/;
 use pdflib_pl 4.0;
 use Carp;
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 my %stacklevel = (
         object => 0,
@@ -1760,20 +1760,22 @@ sub finish {
 }
 
 sub DESTROY {
-    my $self = shift;
+    my $self = $_[0];
+    bless($_[0], 'PDFLib::BoundingBox');
     $self->finish;
 }
 
 sub push_todo {
     my $self = shift;
-    my ($closure) = @_;
-    push @{$self->{todo}}, $closure;
+    push @{$self->{todo}}, [ @_ ];
 }
 
 sub run_todo {
     my $self = shift;
-    for (@{$self->{todo}}) {
-        $_->();
+    for my $ref (@{$self->{todo}}) {
+	my ($method, @params) = @$ref;
+        $method = "PDFLib"->can($method);
+        $method->($self, @params);
     }
     $self->{todo} = [];
 }
@@ -1781,18 +1783,14 @@ sub run_todo {
 sub set_font {
     my $self = shift;
     my @params = @_;
-    $self->push_todo(sub {
-        $self->SUPER::set_font(@params)
-    });
+    $self->push_todo(set_font => @params);
     $self->SUPER::set_font(@params);
 }
 
 sub set_color {
     my $self = shift;
     my @params = @_;
-    $self->push_todo(sub {
-        $self->SUPER::set_color(@params)
-    });
+    $self->push_todo(set_color => @params);
     $self->SUPER::set_color(@params);
 }
 
@@ -1801,9 +1799,7 @@ sub set_color {
 sub print_line {
     my $self = shift;
     my @params = @_;
-    $self->push_todo(sub {
-        $self->SUPER::print_line(@params);
-    });
+    $self->push_todo(print_line => @params);
     $self->{cur_width} = 0;
     $self->SUPER::print_line(@params);
 }
@@ -1811,18 +1807,14 @@ sub print_line {
 sub set_value {
     my $self = shift;
     my @params = @_;
-    $self->push_todo(sub {
-        $self->SUPER::set_value(@params);
-    });
+    $self->push_todo(set_value => @params);
     $self->SUPER::set_value(@params);
 }
 
 sub set_parameter {
     my $self = shift;
     my @params = @_;
-    $self->push_todo(sub {
-        $self->SUPER::set_parameter(@params);
-    });
+    $self->push_todo(set_parameter => @params);
     $self->SUPER::set_parameter(@params);
 }
 
@@ -1865,7 +1857,7 @@ sub print {
         my $width = $self->string_width(text => $text);
         if (($width + $self->{cur_width}) <= $self->{w}) {
             $self->{cur_width} += $width;
-            $self->push_todo(sub { $self->SUPER::print($text) });
+            $self->push_todo(print => $text);
         }
         else {
             # too wide - split into words and print
@@ -1876,7 +1868,7 @@ sub print {
                 my $width = $self->string_width(text => $word);
                 if (($width + $self->{cur_width}) <= $self->{w}) {
                     $self->{cur_width} += $width;
-                    $self->push_todo(sub { $self->SUPER::print($word) });
+                    $self->push_todo(print => $word);
                 }
                 else {
                     # word carries us over the line
@@ -1907,9 +1899,7 @@ sub print {
 
                     $self->set_font(face => $font, size => $size);
                     $self->set_value(leading => $leading);
-                    $self->push_todo(sub {
-                        $self->SUPER::print($word);
-                    });
+                    $self->push_todo( print => $word );
                     $self->{cur_width} = $width;
                 }
             }

@@ -1,5 +1,9 @@
 Revision history for Perl extension PDFLib.
 
+0.12
+    - Fixed a nasty bug in bounding boxes whereby a circular reference
+      was created, causing wierd errors
+
 0.11
     - Major bug in font handling fixed
     - Changed all die()'s for croak().
