@@ -1,5 +1,10 @@
 Revision history for Perl extension PDFLib.
 
+0.11
+    - Major bug in font handling fixed
+    - Changed all die()'s for croak().
+    - Allow bounding boxes starting at 0,0
+
 0.10
     - Added all coordinate translation methods
     

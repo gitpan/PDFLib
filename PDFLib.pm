@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.22 2002/03/06 15:02:59 matt Exp $
+# $Id: PDFLib.pm,v 1.23 2002/03/07 21:15:55 matt Exp $
 
 =head1 NAME
 
@@ -23,8 +23,9 @@ use strict;
 use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
+use Carp;
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 my %stacklevel = (
         object => 0,
@@ -184,7 +185,7 @@ sub filename {
         $pdf->{filename} = shift @_;
         
         if (PDF_open_file($pdf->_pdf, $pdf->{filename}) == -1) {
-            die "PDF_open_file(\"$pdf->{filename}\") failed";
+            croak "PDF_open_file(\"$pdf->{filename}\") failed";
         }
     }
     return $oldname;
@@ -343,7 +344,7 @@ sub lookup_font {
 
     if ($params{bold} || $params{italic}) {
         if (!exists($fontmap{$params{face}})) {
-            die "Don't know about $params{face} for bold/italic,\ntry specifying the bold/italic name directly\ne.g. Times-BoldItalic";
+            croak "Don't know about $params{face} for bold/italic,\ntry specifying the bold/italic name directly\ne.g. Times-BoldItalic";
         }
         my $type = '';
         if ($params{bold}) {
@@ -353,11 +354,16 @@ sub lookup_font {
             $type .= 'italic';
         }
         if (!exists($fontmap{$params{face}}{$type})) {
-            die "No such font $params{face}-$type";
+            croak "No such font $params{face}-$type";
         }
         $params{face} = $fontmap{$params{face}}{$type};
     }
-    
+    else {
+        if (my $face = $fontmap{$params{face}}{plain}) {
+            $params{face} = $face;
+        }
+    }
+
     return %params;
 }
 
@@ -394,7 +400,7 @@ builtin fonts listed above.
 
 =item encoding
 
-One of "host" (default), "builtin", "winansi", "ebcdic", or 
+One of "host" (default), "builtin", "winansi", "ebcdic", or
 "macroman".
 
 See the pdflib documentation for more details.
@@ -402,8 +408,8 @@ See the pdflib documentation for more details.
 =item embed
 
 If set to a true value, this will embed the font in the PDF
-file. This can be useful if using fonts outside of the 14 
-listed above, but extra font metrics information is required 
+file. This can be useful if using fonts outside of the 14
+listed above, but extra font metrics information is required
 and you will need to read the pdflib documentation for more
 information.
 
@@ -414,7 +420,7 @@ information.
 sub set_font {
     my $pdf = shift;
     my %params = lookup_font(@_); # expecting: face, size, bold, italic
-    
+
     $params{size} ||= $pdf->get_value('fontsize') || 10.0;
 
     if ($params{handle}) {
@@ -429,16 +435,16 @@ sub set_font {
 
     # warn("PDF_findfont(\$p, '$fontstring', 'host', 0);\n");
     my $font = PDF_findfont($pdf->_pdf,
-                $params{face}, 
-                $params{encoding} || 'host', 
+                $params{face},
+                $params{encoding} || 'host',
                 $params{embed} || 0
                 );
     # warn("font: $font\n");
-    
+
     $pdf->{current_font}->{handle} = $font;
     $pdf->{current_font}->{face} = $params{face};
     $pdf->{current_font}->{size} = $params{size};
-    
+
     # warn("font handle: $font (size: $params{size})\n");
 
     PDF_setfont($pdf->_pdf, $font, $params{size});
@@ -547,7 +553,7 @@ your page.
 
 sub print {
     my $pdf = shift;
-    
+
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
 
     PDF_show($pdf->_pdf, $_[0]);
@@ -562,9 +568,9 @@ Prints text at the given X and Y coordinates.
 sub print_at {
     my $pdf = shift;
     my ($text, %params) = @_;
-    
+
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
-    
+
     PDF_show_xy($pdf->_pdf, $text, @params{qw(x y)});
 }
 
@@ -572,7 +578,7 @@ sub print_at {
 
 This is perhaps the most interesting output method as it allows
 you to define a bounding box to put the text into, and PDFLib
-will wrap the text for you. The only problem with it is that you 
+will wrap the text for you. The only problem with it is that you
 cannot change the font while printing into this kind of bounding
 box. Better to use L<"new_bounding_box"> below.
 
@@ -645,7 +651,7 @@ sub get_value {
     my $pdf = shift;
     my $key = shift;
     my $modifier = shift || 0;
-    
+
     return PDF_get_value($pdf->_pdf, $key, $modifier);
 }
 
@@ -687,7 +693,7 @@ Same again. See the pdflib docs for which options are available.
 
 sub set_parameter {
     my $pdf = shift;
-    
+
     PDF_set_parameter($pdf->_pdf, $_[0], $_[1]);
 }
 
@@ -765,15 +771,15 @@ This returns a PDFLib::Image object.
 
 sub load_image {
     my $pdf = shift;
-    die "Cannot load images unless at document level"
+    croak "Cannot load images unless at document level"
                 if $pdf->stacklevel > $stacklevel{document};
 
     my %params = @_;
     
     my $img = PDFLib::Image->open(pdf => $pdf, %params);
-    
+
     push @{$pdf->{images}}, $img;
-    
+
     return $img;
 }
 
@@ -812,7 +818,7 @@ sub add_image {
     
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
     
-    PDF_place_image($pdf->_pdf, $params{img}->img, 
+    PDF_place_image($pdf->_pdf, $params{img}->img,
                 $params{x}, 
                 $params{y}, 
                 $params{scale} || 1.0);
@@ -820,7 +826,7 @@ sub add_image {
 
 =head2 add_bookmark(...)
 
-Adds a bookmark to the PDF file (normally displayed in a tree 
+Adds a bookmark to the PDF file (normally displayed in a tree
 view on the left hand side of the pages in Adobe acrobat reader).
 Takes the following parameters:
 
@@ -882,7 +888,7 @@ sub add_link {
     my $pdf = shift;
     
     my %params = @_;
-    
+
     my $link = $params{link};
     my ($llx, $lly) = @params{'x', 'y'};
     my ($urx, $ury) = ($llx + $params{w}, $lly + $params{h});
@@ -910,7 +916,7 @@ around links anyway, sadly.
 sub set_border_style {
     my $pdf = shift;
     my ($style, $width) = @_;
-    
+
     PDF_set_border_style($pdf->_pdf, $style, $width);
 }
 
@@ -1137,8 +1143,8 @@ Set the current point.
 
 sub move_to {
     my $pdf = shift;
-    die "Invalid number of params (need two)" unless @_ == 2;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Invalid number of params (need two)" unless @_ == 2;
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     $pdf->{stacklevel} = 'path';
     PDF_moveto($pdf->_pdf, $_[0], $_[1]);
 }
@@ -1151,8 +1157,8 @@ Draw a line from the current point to the coordinates specified.
 
 sub line_to {
     my $pdf = shift;
-    die "Invalid number of params (need two)" unless @_ == 2;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Invalid number of params (need two)" unless @_ == 2;
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     $pdf->{stacklevel} = 'path';
     PDF_lineto($pdf->_pdf, $_[0], $_[1]);
 }
@@ -1173,7 +1179,7 @@ are passed as a hash:
 
 sub bezier {
     my $pdf = shift;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     my %params = @_;
     $pdf->{stacklevel} = 'path';
     PDF_curveto($pdf->_pdf, @params{qw(x1 y1 x2 y2 x3 y3)});
@@ -1187,7 +1193,7 @@ Draw a circle using parameters x, y and r (radius).
 
 sub circle {
     my $pdf = shift;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     my %params = @_;
     $pdf->{stacklevel} = 'path';
     PDF_circle($pdf->_pdf, @params{qw(x y r)});
@@ -1217,7 +1223,7 @@ The start and end angles of the arc.
 
 sub arc {
     my $pdf = shift;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     my %params = @_;
     $pdf->{stacklevel} = 'path';
     if ($params{clockwise}) {
@@ -1237,7 +1243,7 @@ simply x, y, w, h.
 
 sub rect {
     my $pdf = shift;
-    die "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
+    croak "Cannot draw without a page" unless $pdf->stacklevel >= $stacklevel{page};
     my %params = @_;
     $pdf->{stacklevel} = 'path';
     PDF_rect($pdf->_pdf, @params{qw(x y w h)});
@@ -1463,6 +1469,11 @@ a hash parameter somehow. It is easiest to show using examples:
   # see make_pattern below
   $pdf->set_color(pattern => $pattern);
 
+You can also pass in a type parameter to set either the "stroke" or
+the "fill" colour, or "both". The default is "both":
+
+  $pdf->set_color(type => 'stroke', gray => 0.5);
+
 =cut
 
 sub set_color {
@@ -1470,7 +1481,7 @@ sub set_color {
     my %params = @_;
 
     $params{type} ||= "both";
-    
+
     if (my $grayscale = $params{gray} || $params{grey}) {
         return PDF_setcolor($pdf->_pdf,
             $params{type}, "gray", $grayscale, 0, 0, 0);
@@ -1615,13 +1626,18 @@ C<$pdf->load_image()> above.
 package PDFLib::Image;
 
 use pdflib_pl 4.0;
+use Carp;
 
 sub open {
     my $class = shift;
     my %params = @_;
-    
-    PDF_set_parameter($params{pdf}->_pdf, "imagewarning", "true");
-    
+
+    $params{pdf}->set_parameter(imagewarning => "true");
+
+    if (!-e $params{filename}) {
+        croak("File '$params{filename}' doesn't exist!");
+    }
+
     my $image_handle = PDF_open_image_file(
                 $params{pdf}->_pdf,
                 $params{filetype},
@@ -1632,7 +1648,7 @@ sub open {
 
     if ($image_handle == -1) {
         PDF_set_parameter($params{pdf}->_pdf, "imagewarning", "true");
-        die "Cannot open image file '$params{filename}'";
+        croak "Cannot open image file '$params{filename}': $!";
     }
 
     $params{handle} = $image_handle;
@@ -1679,6 +1695,8 @@ package PDFLib::BoundingBox;
 
 use vars qw(@ISA);
 @ISA = qw(PDFLib);
+use pdflib_pl 4.0;
+use Carp;
 
 =head1 PDFLib::BoundingBox
 
@@ -1701,8 +1719,8 @@ sub new {
     my $class = shift;
     my ($pdf, %args) = @_;
 
-    die "Invalid BoundingBox params" unless
-        $args{x} && $args{y} && $args{w} && $args{h};
+    croak "Invalid BoundingBox params" unless
+        exists($args{x}) && exists($args{y}) && $args{w} && $args{h};
 
     $args{wrap} = 1 if (!exists($args{wrap}));
     $args{align} ||= 'left';
@@ -1735,7 +1753,7 @@ sub finish {
         $self->{align} eq 'left' ?
             $self->{x}
             :
-            die "No such alignment: $self->{align}";
+            croak "No such alignment: $self->{align}";
     $self->set_text_pos($xpos, $self->{y2});
     $self->run_todo;
     $self->{finished} = 1;
@@ -1871,7 +1889,7 @@ sub print {
                         $self->{align} eq 'left' ?
                             $self->{x}
                             :
-                            die "No such alignment: $self->{align}";
+                            croak "No such alignment: $self->{align}";
                     $self->set_text_pos($xpos, $self->{y2});
                     $self->run_todo;
 
