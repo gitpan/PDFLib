@@ -1,5 +1,5 @@
 use Test;
-BEGIN { plan tests => 3 }
+BEGIN { plan tests => 4 }
 use PDFLib;
 
 my $pdf;
@@ -11,7 +11,7 @@ $pdf->start_page;
 
 {
     my $bb = $pdf->new_bounding_box(
-        x => 30, y => 800, w => 300, h => 800
+        x => 30, y => 800, w => 250, h => 200
     );
 
     $bb->set_value(leading => $bb->get_value("fontsize") + 2);
@@ -44,13 +44,23 @@ EOT
     
     $bb->set_color(rgb => [1,0,1]);
 
-    $bb->print(<<'EOT');
+    my $leftover = $bb->print(<<'EOT');
 Rather than describing the format in detail, it is far easier to
 examine (and copy) the example in the testfiles directory in the
 distribution. We have included that verbatim here in case you lost it
 during the install
 EOT
 
+    ok($leftover);
+    
+    $bb->finish;
+
+    $bb = $pdf->new_bounding_box(
+        x => 300, y => 800, w => 250, h => 200
+    );
+    
+    $bb->print($leftover);
+    
     $bb->finish;
 }
 

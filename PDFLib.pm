@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.13 2002/02/11 16:09:46 matt Exp $
+# $Id: PDFLib.pm,v 1.14 2002/02/12 15:25:45 matt Exp $
 
 =head1 NAME
 
@@ -24,7 +24,7 @@ use vars qw/$VERSION/;
 
 use pdflib_pl 4.0;
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 my %stacklevel = (
         object => 0,
@@ -1603,6 +1603,11 @@ For details of bounding boxes, see L<"new_bounding_box"> above.
 When you are finished with a bounding box, you B<must> call finish() on
 it so that it can clean up.
 
+Also note that if you create subsequent bounding boxes one after the other,
+a font change on the bounding box B<will> have effect on the next bounding
+box - it's transparently passed through to the page level. This is probably
+desirable (see the output of t/06bounding.t in the distribution for example).
+
 =cut
 
 sub new {
@@ -1628,6 +1633,8 @@ sub new {
                    w => $args{w}, h => $args{h});
         $self->clip;
     }
+    
+    $self->{y2} = $self->{y};
 
     return $self;
 }
@@ -1706,10 +1713,30 @@ sub set_parameter {
     $self->SUPER::set_parameter(@params);
 }
 
+=head2 print($text)
+
+Returns the characters it could not fit into the bounding box,
+which is useful if you are doing multiple bounding boxes or pages.
+
+=cut
+
 sub print {
     my $self = shift;
     if (!$self->{wrap}) {
-        $self->SUPER::print(@_);
+        my $text = shift;
+        my @lines = split(/\n/, $text, -1);
+        my $last = pop(@lines);
+        while (@lines) {
+            my $line = shift(@lines);
+            $self->SUPER::print($line);
+            $self->SUPER::print_line("");
+            my ($x, $y) = $self->get_text_pos;
+            if ($y < ($self->{y} - $self->{h})) {
+                # gone overboard
+                return join("\n", @lines, $last);
+            }
+        }
+        $self->SUPER::print($last) if length($last);
     }
     else {
         my $text = shift;
@@ -1744,7 +1771,7 @@ sub print {
                             $self->{x}
                             :
                             die "No such alignment: $self->{align}";
-                    $self->set_text_pos($xpos, $self->{y});
+                    $self->set_text_pos($xpos, $self->{y2});
                     $self->run_todo;
 
                     # font resets on newline...
@@ -1753,7 +1780,11 @@ sub print {
                     my $leading = $self->get_value("leading");
                     
                     $self->SUPER::print_line("");
-                    (undef, $self->{y}) = $self->get_text_pos;
+                    (undef, $self->{y2}) = $self->get_text_pos;
+                    if ($self->{y2} < ($self->{y} - $self->{h})) {
+                        # gone overboard
+                        return $word . $text;
+                    }
 
                     $self->set_font(face => $font, size => $size);
                     $self->set_value(leading => $leading);
