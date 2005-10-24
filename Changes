@@ -1,5 +1,12 @@
 Revision history for Perl extension PDFLib.
 
+0.14
+    - Fixed a problem with the bounding box code reporting the end of the
+      box too early.
+    - added support for underlining text via new sub
+    - fix bounding box wraparound font/color mixup bug
+    - add more scaling options to add_image
+
 0.12
     - Fixed a nasty bug in bounding boxes whereby a circular reference
       was created, causing wierd errors

@@ -1,9 +1,9 @@
 use Test;
-BEGIN { plan tests => 4 }
+BEGIN { plan tests => 5 }
 use PDFLib;
 
 # my $pdf = PDFLib->new(filename => "/tmp/test.pdf");
-my $pdf = PDFLib->new();
+my $pdf = PDFLib->new(filename => "test.pdf");
 
 ok($pdf);
 
@@ -68,5 +68,19 @@ for (my $i = 100; $i < $a4[1]; $i += 100) {
     $pdf->print_at($i, x => 40 - DELTA, y => $i - FONTSIZE/3);
 }
 
-ok($pdf->get_buffer);
+$pdf->set_dash(0, 0);
+$pdf->move_to(30, 75);
+$pdf->bezier(
+    x1 => 240, y1 => 30,
+    x2 => 240, y2 => 30,
+    x3 => 300, y3 => 120,
+);
+$pdf->stroke;
+
+$pdf->finish;
+undef $pdf;
+
+ok(-e "test.pdf");
+ok(-M _ <= 0);
+
 

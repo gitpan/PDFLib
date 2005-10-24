@@ -1,4 +1,4 @@
-# $Id: PDFLib.pm,v 1.24 2002/03/21 14:52:33 matt Exp $
+# $Id: PDFLib.pm,v 1.28 2005/10/24 18:27:55 matt Exp $
 
 =head1 NAME
 
@@ -25,7 +25,7 @@ use vars qw/$VERSION/;
 use pdflib_pl 4.0;
 use Carp;
 
-$VERSION = '0.12';
+$VERSION = '0.14';
 
 my %stacklevel = (
         object => 0,
@@ -553,10 +553,17 @@ your page.
 
 sub print {
     my $pdf = shift;
-
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
 
+    my @pos = $pdf->get_text_pos();
     PDF_show($pdf->_pdf, $_[0]);
+    if ($pdf->{underline}) {
+        my @newpos = $pdf->get_text_pos();
+        $pdf->move_to($pos[0],$pos[1]-1);
+        $pdf->line_to($newpos[0],$newpos[1]-1);
+        $pdf->stroke();
+        $pdf->set_text_pos(@newpos);
+    }
 }
 
 =head2 print_at($text, x => $x, y => $y)
@@ -805,12 +812,38 @@ The y coordinate
 
 =item scale
 
-The scaling of the image. Note that only full scaling is possible, not
-separate X and Y scaling. This defaults to 1.0.
+The scaling of the image. This defaults to 1.0.
+
+=item scale_x
+
+Horizontal scaling.
+
+=item scale_y
+
+Vertical scaling.
+
+=item w
+
+The width.
+
+=item h
+
+The height.
+
+Either specify scale I<or> (scale_x I<and> scale_y), I<or> (w I<and> h) I<or> none.
+
+=item dpi
+
+The desired image DPI. If left out, uses the image's true DPI value, if available.
+B<Please Note:> This is different than before, where all images were treated as having 72dpi.
+If your legacy application needs this behaviour and cannot easily be modified, set
+C<$PDFLib::DPI = 72;>.
 
 =back
 
 =cut
+
+our $DPI = 0;
 
 sub add_image {
     my $pdf = shift;
@@ -818,10 +851,29 @@ sub add_image {
     
     $pdf->start_page() unless $pdf->stacklevel >= $stacklevel{'page'};
     
-    PDF_place_image($pdf->_pdf, $params{img}->img,
-                $params{x}, 
-                $params{y}, 
-                $params{scale} || 1.0);
+    my $dpi = $params{dpi} || $DPI;
+
+    if ($params{w}) {
+        PDF_fit_image($pdf->_pdf, $params{img}->img,
+                      $params{x}, 
+                      $params{y}, 
+                      "dpi $dpi fitmethod entire boxsize {$params{w} $params{h}}");
+    } elsif ($params{scale_x}) {
+        PDF_fit_image($pdf->_pdf, $params{img}->img,
+                      $params{x}, 
+                      $params{y}, 
+                      "dpi $dpi scale {$params{scale_x} $params{scale_y}}");
+    } elsif ($params{scale}) {
+        PDF_fit_image($pdf->_pdf, $params{img}->img,
+                      $params{x}, 
+                      $params{y}, 
+                      "dpi $dpi scale $params{scale}");
+    } else {
+        PDF_fit_image($pdf->_pdf, $params{img}->img,
+                      $params{x}, 
+                      $params{y}, 
+                      "dpi $dpi");
+    }
 }
 
 =head2 add_bookmark(...)
@@ -1506,6 +1558,11 @@ sub set_color {
 
 *set_colour = \&set_color; # yicky americanisms!
 
+sub set_decoration {
+    my ($self,$val) = @_;
+    $self->{underline} = ($val eq 'underline');
+}
+
 =head2 make_spot_color/make_spot_colour
 
 Makes a named spot colour using the name passed as a parameter.
@@ -1735,6 +1792,8 @@ sub new {
 
     $self->{y2} = $self->{y};
     $self->{finished} = 0;
+    $self->{fontname} = $self->SUPER::get_parameter("fontname");
+    $self->{fontsize} = $self->SUPER::get_value("fontsize");
     
     $self->set_text_pos($self->{x}, $self->{y});
 
@@ -1772,11 +1831,19 @@ sub push_todo {
 
 sub run_todo {
     my $self = shift;
+    my $fontname = $self->SUPER::get_parameter("fontname");
+    my $fontsize = $self->SUPER::get_value("fontsize");
+    my $underline = $self->{underline};
+    $self->SUPER::set_font(face => $self->{fontname}, size => $self->{fontsize});
     for my $ref (@{$self->{todo}}) {
 	my ($method, @params) = @$ref;
         $method = "PDFLib"->can($method);
         $method->($self, @params);
     }
+    $self->{fontname} = $self->SUPER::get_parameter("fontname");
+    $self->{fontsize} = $self->SUPER::get_value("fontsize");
+    $self->SUPER::set_font(face => $fontname, size => $fontsize);
+    $self->SUPER::set_decoration($underline?'underline':'none');
     $self->{todo} = [];
 }
 
@@ -1787,11 +1854,18 @@ sub set_font {
     $self->SUPER::set_font(@params);
 }
 
+sub set_decoration {
+    my $self = shift;
+    my @params = @_;
+    $self->push_todo(set_decoration => @params);
+#    $self->SUPER::set_decoration(@params);
+}
+
 sub set_color {
     my $self = shift;
     my @params = @_;
     $self->push_todo(set_color => @params);
-    $self->SUPER::set_color(@params);
+#    $self->SUPER::set_color(@params);
 }
 
 *set_colour = \&set_color;
@@ -1801,21 +1875,21 @@ sub print_line {
     my @params = @_;
     $self->push_todo(print_line => @params);
     $self->{cur_width} = 0;
-    $self->SUPER::print_line(@params);
+#    $self->SUPER::print_line(@params);
 }
 
 sub set_value {
     my $self = shift;
     my @params = @_;
     $self->push_todo(set_value => @params);
-    $self->SUPER::set_value(@params);
+#    $self->SUPER::set_value(@params);
 }
 
 sub set_parameter {
     my $self = shift;
     my @params = @_;
     $self->push_todo(set_parameter => @params);
-    $self->SUPER::set_parameter(@params);
+#    $self->SUPER::set_parameter(@params);
 }
 
 =head2 print($text)
@@ -1836,21 +1910,22 @@ sub print {
             $self->SUPER::print($line);
             
             # font resets on newline...
-            my $font = $self->get_parameter("fontname");
-            my $size = $self->get_value("fontsize");
-            my $leading = $self->get_value("leading");
+#            my $font = $self->{"fontname"};
+#            my $size = $self->{"fontsize"};
+#            my $leading = $self->get_value("leading");
             
             $self->SUPER::print_line("");
             (undef, $self->{y2}) = $self->get_text_pos;
-            if ($self->{y2} < (($PDFLib::Page::Size{$self->papersize}[1] - $self->{y}) - $self->{h})) {
+            # if ($self->{y2} < (($PDFLib::Page::Size{$self->papersize}[1] - $self->{y}) - $self->{h})) {
+            if ($self->{y2} < ($self->{y} - $self->{h})) {
                 # gone overboard
                 return join("\n", @lines, $last);
             }
             
-            $self->set_font(face => $font, size => $size);
-            $self->set_value(leading => $leading);
+#            $self->SUPER::set_font(face => $font, size => $size);
+#            $self->SUPER::set_value(leading => $leading);
         }
-        $self->SUPER::print($last) if length($last);
+        $self->SUPER::print($last) if ($last);
     }
     else {
         my $text = shift;
@@ -1886,9 +1961,9 @@ sub print {
                     $self->run_todo;
 
                     # font resets on newline...
-                    my $font = $self->get_parameter("fontname");
-                    my $size = $self->get_value("fontsize");
-                    my $leading = $self->get_value("leading");
+#                    my $font = $self->get_parameter("fontname");
+#                    my $size = $self->get_value("fontsize");
+#                    my $leading = $self->get_value("leading");
 
                     $self->SUPER::print_line("");
                     (undef, $self->{y2}) = $self->get_text_pos;
@@ -1897,8 +1972,8 @@ sub print {
                         return $word . $text;
                     }
 
-                    $self->set_font(face => $font, size => $size);
-                    $self->set_value(leading => $leading);
+#                    $self->set_font(face => $font, size => $size);
+#                    $self->set_value(leading => $leading);
                     $self->push_todo( print => $word );
                     $self->{cur_width} = $width;
                 }
